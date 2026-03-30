@@ -202,7 +202,7 @@ router.post('/', async (req, res) => {
     const id = generateUUID();
     await execute(
       `INSERT INTO budgets (id, family_id, category, budget_amount, period, note, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+       VALUES ($1, $1, $1, $1, $1, $1, $1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       [id, familyId, category, parseFloat(budget_amount), period, note || null, userId]
     );
 
@@ -236,8 +236,8 @@ router.put('/:id', async (req, res) => {
 
     await execute(
       `UPDATE budgets SET
-        budget_amount = COALESCE(?, budget_amount),
-        note = COALESCE(?, note),
+        budget_amount = COALESCE($1, budget_amount),
+        note = COALESCE($1, note),
         updated_at = CURRENT_TIMESTAMP
        WHERE id = $1::text`,
       [budget_amount ? parseFloat(budget_amount) : null, note !== undefined ? note : null, id]
