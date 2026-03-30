@@ -184,7 +184,7 @@ router.post('/import', authenticate, async (req, res, next) => {
       // 去重：相同日期+金额+类型+交易单号
       if (skipDuplicates && r.tradeNo) {
         const exist = await query(
-          'SELECT id FROM bills WHERE family_id=? AND wechat_trade_no=?',
+          'SELECT id FROM bills WHERE family_id = ?::text AND wechat_trade_no=?',
           [req.user.familyId, r.tradeNo]
         );
         if (exist.length > 0) { skipped++; continue; }
@@ -193,7 +193,7 @@ router.post('/import', authenticate, async (req, res, next) => {
       const id = generateUUID();
       await execute(
         `INSERT INTO bills (id, family_id, member_id, type, category, amount, note, date, wechat_trade_no, source, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'wechat_import', datetime('now'))`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'wechat_import', CURRENT_TIMESTAMP)`,
         [id, req.user.familyId, req.user.id, r.type, r.category, r.amount, r.note || '', r.date, r.tradeNo || null]
       );
       imported++;
