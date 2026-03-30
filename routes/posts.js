@@ -21,12 +21,12 @@ router.get('/', authenticate, async (req, res, next) => {
       SELECT p.*, u.username, u.nickname as author_name, u.avatar as author_avatar
       FROM posts p
       LEFT JOIN users u ON p.author_id = u.id
-      WHERE p.family_id = ?
+      WHERE p.family_id = $1
     `;
     const params = [req.user.familyId];
 
     if (type) {
-      sql += ' AND p.type = ?';
+      sql += ' AND p.type = $1';
       params.push(type);
     }
 
@@ -44,20 +44,20 @@ router.get('/', authenticate, async (req, res, next) => {
     // 获取每个帖子的点赞和评论数
     for (const post of posts) {
       const likes = await query(
-        'SELECT COUNT(*) as count FROM likes WHERE post_id = ?::text',
+        'SELECT COUNT(*) as count FROM likes WHERE post_id = $1::text',
         [post.id]
       );
       post.likeCount = likes[0].count;
 
       const comments = await query(
-        'SELECT COUNT(*) as count FROM comments WHERE post_id = ?::text',
+        'SELECT COUNT(*) as count FROM comments WHERE post_id = $1::text',
         [post.id]
       );
       post.commentCount = comments[0].count;
 
       // 检查当前用户是否已点赞
       const userLiked = await query(
-        'SELECT id FROM likes WHERE post_id = ?::text AND user_id = ?',
+        'SELECT id FROM likes WHERE post_id = $1::text AND user_id = $1',
         [post.id, req.user.id]
       );
       post.isLiked = userLiked.length > 0;
@@ -89,7 +89,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
       `SELECT p.*, u.username, u.nickname as author_name, u.avatar as author_avatar
        FROM posts p
        LEFT JOIN users u ON p.author_id = u.id
-       WHERE p.id = ? AND p.family_id = ?`,
+       WHERE p.id = $1 AND p.family_id = $1`,
       [id, req.user.familyId]
     );
 
@@ -104,14 +104,14 @@ router.get('/:id', authenticate, async (req, res, next) => {
 
     // 获取点赞数
     const likes = await query(
-      'SELECT COUNT(*) as count FROM likes WHERE post_id = ?::text',
+      'SELECT COUNT(*) as count FROM likes WHERE post_id = $1::text',
       [id]
     );
     post.likeCount = likes[0].count;
 
     // 检查当前用户是否已点赞
     const userLiked = await query(
-      'SELECT id FROM likes WHERE post_id = ?::text AND user_id = ?',
+      'SELECT id FROM likes WHERE post_id = $1::text AND user_id = $1',
       [id, req.user.id]
     );
     post.isLiked = userLiked.length > 0;
@@ -121,7 +121,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
       `SELECT c.*, u.username, u.nickname as author_name, u.avatar as author_avatar
        FROM comments c
        LEFT JOIN users u ON c.author_id = u.id
-       WHERE c.post_id = ?
+       WHERE c.post_id = $1
        ORDER BY c.created_at ASC`,
       [id]
     );
@@ -205,7 +205,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
 
     // 检查帖子是否存在
     const existingPosts = await query(
-      'SELECT author_id FROM posts WHERE id = ?::text AND family_id = ?',
+      'SELECT author_id FROM posts WHERE id = $1::text AND family_id = $1',
       [id, req.user.familyId]
     );
 
@@ -228,11 +228,11 @@ router.put('/:id', authenticate, async (req, res, next) => {
     const params = [];
 
     if (content !== undefined) {
-      updates.push('content = ?');
+      updates.push('content = $1');
       params.push(content);
     }
     if (type !== undefined) {
-      updates.push('type = ?');
+      updates.push('type = $1');
       params.push(type);
     }
 
@@ -245,7 +245,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
 
     params.push(id);
     await execute(
-      `UPDATE posts SET ${updates.join(', ')} WHERE id = ?::text`,
+      `UPDATE posts SET ${updates.join(', ')} WHERE id = $1::text`,
       params
     );
 
@@ -265,7 +265,7 @@ router.delete('/:id', authenticate, async (req, res, next) => {
 
     // 检查帖子是否存在
     const existingPosts = await query(
-      'SELECT author_id, family_id FROM posts WHERE id = ?::text',
+      'SELECT author_id, family_id FROM posts WHERE id = $1::text',
       [id]
     );
 
@@ -288,7 +288,7 @@ router.delete('/:id', authenticate, async (req, res, next) => {
     // 还要检查用户是否是家庭管理员
     if (post.author_id !== req.user.id) {
       const families = await query(
-        'SELECT admin_id FROM families WHERE id = ?::text',
+        'SELECT admin_id FROM families WHERE id = $1::text',
         [post.family_id]
       );
       if (families.length === 0 || families[0].admin_id !== req.user.id) {
@@ -299,7 +299,7 @@ router.delete('/:id', authenticate, async (req, res, next) => {
       }
     }
 
-    await execute('DELETE FROM posts WHERE id = ?::text', [id]);
+    await execute('DELETE FROM posts WHERE id = $1::text', [id]);
 
     res.json({
       success: true,
@@ -317,7 +317,7 @@ router.post('/:id/like', authenticate, async (req, res, next) => {
 
     // 检查帖子是否存在
     const posts = await query(
-      'SELECT id, author_id, family_id FROM posts WHERE id = ?::text',
+      'SELECT id, author_id, family_id FROM posts WHERE id = $1::text',
       [id]
     );
 
@@ -330,7 +330,7 @@ router.post('/:id/like', authenticate, async (req, res, next) => {
 
     // 检查是否已点赞
     const existingLike = await query(
-      'SELECT id FROM likes WHERE post_id = ?::text AND user_id = ?',
+      'SELECT id FROM likes WHERE post_id = $1::text AND user_id = $1',
       [id, req.user.id]
     );
 
@@ -350,7 +350,7 @@ router.post('/:id/like', authenticate, async (req, res, next) => {
 
     // 更新帖子点赞数
     await execute(
-      'UPDATE posts SET likes = likes + 1 WHERE id = ?::text',
+      'UPDATE posts SET likes = likes + 1 WHERE id = $1::text',
       [id]
     );
 
@@ -386,13 +386,13 @@ router.delete('/:id/like', authenticate, async (req, res, next) => {
     const { id } = req.params;
 
     const result = await execute(
-      'DELETE FROM likes WHERE post_id = ?::text AND user_id = ?',
+      'DELETE FROM likes WHERE post_id = $1::text AND user_id = $1',
       [id, req.user.id]
     );
 
     if (result.affectedRows > 0) {
       await execute(
-        'UPDATE posts SET likes = likes - 1 WHERE id = ?::text AND likes > 0',
+        'UPDATE posts SET likes = likes - 1 WHERE id = $1::text AND likes > 0',
         [id]
       );
     }
@@ -421,7 +421,7 @@ router.post('/:id/comments', authenticate, async (req, res, next) => {
 
     // 检查帖子是否存在
     const posts = await query(
-      'SELECT id, author_id, family_id FROM posts WHERE id = ?::text',
+      'SELECT id, author_id, family_id FROM posts WHERE id = $1::text',
       [id]
     );
 
@@ -498,7 +498,7 @@ router.delete('/comments/:commentId', authenticate, async (req, res, next) => {
 
     // 检查评论是否存在
     const comments = await query(
-      'SELECT author_id, post_id FROM comments WHERE id = ?::text',
+      'SELECT author_id, post_id FROM comments WHERE id = $1::text',
       [commentId]
     );
 
@@ -515,13 +515,13 @@ router.delete('/comments/:commentId', authenticate, async (req, res, next) => {
     if (comment.author_id !== req.user.id) {
       // 检查是否是帖子作者（家庭管理员权限）
       const posts = await query(
-        'SELECT author_id, family_id FROM posts WHERE id = ?::text',
+        'SELECT author_id, family_id FROM posts WHERE id = $1::text',
         [comment.post_id]
       );
 
       if (posts.length > 0) {
         const families = await query(
-          'SELECT admin_id FROM families WHERE id = ?::text',
+          'SELECT admin_id FROM families WHERE id = $1::text',
           [posts[0].family_id]
         );
 
@@ -535,7 +535,7 @@ router.delete('/comments/:commentId', authenticate, async (req, res, next) => {
       }
     }
 
-    await execute('DELETE FROM comments WHERE id = ?::text', [commentId]);
+    await execute('DELETE FROM comments WHERE id = $1::text', [commentId]);
 
     res.json({
       success: true,
