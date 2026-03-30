@@ -37,32 +37,32 @@ router.get('/', authenticate, async (req, res, next) => {
       SELECT b.*, u.username, u.nickname as member_name
       FROM bills b
       LEFT JOIN users u ON b.member_id = u.id
-      WHERE b.family_id = ?
+      WHERE b.family_id = $1
     `;
     const params = [req.user.familyId];
 
     if (type) {
-      sql += ' AND b.type = ?';
+      sql += ' AND b.type = $1';
       params.push(type);
     }
 
     if (category) {
-      sql += ' AND b.category = ?';
+      sql += ' AND b.category = $1';
       params.push(category);
     }
 
     if (memberId) {
-      sql += ' AND b.member_id = ?';
+      sql += ' AND b.member_id = $1';
       params.push(memberId);
     }
 
     if (startDate) {
-      sql += ' AND b.date >= ?';
+      sql += ' AND b.date >= $1';
       params.push(startDate);
     }
 
     if (endDate) {
-      sql += ' AND b.date <= ?';
+      sql += ' AND b.date <= $1';
       params.push(endDate);
     }
 
@@ -137,17 +137,17 @@ router.get('/statistics', authenticate, async (req, res, next) => {
         SUM(b.amount) as total_amount,
         COUNT(*) as count
       FROM bills b
-      WHERE b.family_id = ?
+      WHERE b.family_id = $1
     `;
     const params = [req.user.familyId];
 
     if (startDate) {
-      sql += ' AND b.date >= ?';
+      sql += ' AND b.date >= $1';
       params.push(startDate);
     }
 
     if (endDate) {
-      sql += ' AND b.date <= ?';
+      sql += ' AND b.date <= $1';
       params.push(endDate);
     }
 
@@ -198,22 +198,22 @@ router.get('/categories', authenticate, async (req, res, next) => {
         SUM(b.amount) as total_amount,
         COUNT(*) as count
       FROM bills b
-      WHERE b.family_id = ?
+      WHERE b.family_id = $1
     `;
     const params = [req.user.familyId];
 
     if (type) {
-      sql += ' AND b.type = ?';
+      sql += ' AND b.type = $1';
       params.push(type);
     }
 
     if (startDate) {
-      sql += ' AND b.date >= ?';
+      sql += ' AND b.date >= $1';
       params.push(startDate);
     }
 
     if (endDate) {
-      sql += ' AND b.date <= ?';
+      sql += ' AND b.date <= $1';
       params.push(endDate);
     }
 
@@ -252,17 +252,17 @@ router.get('/members', authenticate, async (req, res, next) => {
         COUNT(*) as bill_count
       FROM bills b
       LEFT JOIN users u ON b.member_id = u.id
-      WHERE b.family_id = ?
+      WHERE b.family_id = $1
     `;
     const params = [req.user.familyId];
 
     if (startDate) {
-      sql += ' AND b.date >= ?';
+      sql += ' AND b.date >= $1';
       params.push(startDate);
     }
 
     if (endDate) {
-      sql += ' AND b.date <= ?';
+      sql += ' AND b.date <= $1';
       params.push(endDate);
     }
 
@@ -288,7 +288,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
       `SELECT b.*, u.username, u.nickname as member_name
        FROM bills b
        LEFT JOIN users u ON b.member_id = u.id
-       WHERE b.id = ? AND b.family_id = ?`,
+       WHERE b.id = $1 AND b.family_id = $1`,
       [id, req.user.familyId]
     );
 
@@ -428,7 +428,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
 
     // 检查账单是否存在
     const existingBills = await query(
-      'SELECT id FROM bills WHERE id = ?::text AND family_id = ?',
+      'SELECT id FROM bills WHERE id = $1::text AND family_id = $1',
       [id, req.user.familyId]
     );
 
@@ -444,35 +444,35 @@ router.put('/:id', authenticate, async (req, res, next) => {
     const params = [];
 
     if (type !== undefined) {
-      updates.push('type = ?');
+      updates.push('type = $1');
       params.push(type);
     }
     if (amount !== undefined) {
-      updates.push('amount = ?');
+      updates.push('amount = $1');
       params.push(amount);
     }
     if (category !== undefined) {
-      updates.push('category = ?');
+      updates.push('category = $1');
       params.push(category);
     }
     if (date !== undefined) {
-      updates.push('date = ?');
+      updates.push('date = $1');
       params.push(date);
     }
     if (memberId !== undefined) {
-      updates.push('member_id = ?');
+      updates.push('member_id = $1');
       params.push(memberId);
     }
     if (payment !== undefined) {
-      updates.push('payment = ?');
+      updates.push('payment = $1');
       params.push(payment);
     }
     if (note !== undefined) {
-      updates.push('note = ?');
+      updates.push('note = $1');
       params.push(note);
     }
     if (imageUrl !== undefined) {
-      updates.push('image_url = ?');
+      updates.push('image_url = $1');
       params.push(imageUrl);
     }
 
@@ -485,7 +485,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
 
     params.push(id);
     await execute(
-      `UPDATE bills SET ${updates.join(', ')} WHERE id = ?::text`,
+      `UPDATE bills SET ${updates.join(', ')} WHERE id = $1::text`,
       params
     );
 
@@ -504,7 +504,7 @@ router.delete('/:id', authenticate, async (req, res, next) => {
     const { id } = req.params;
 
     const result = await execute(
-      'DELETE FROM bills WHERE id = ?::text AND family_id = ?',
+      'DELETE FROM bills WHERE id = $1::text AND family_id = $1',
       [id, req.user.familyId]
     );
 
@@ -538,7 +538,7 @@ router.delete('/', authenticate, async (req, res, next) => {
 
     const placeholders = ids.map(() => '?').join(',');
     const result = await execute(
-      `DELETE FROM bills WHERE id IN (${placeholders}) AND family_id = ?`,
+      `DELETE FROM bills WHERE id IN (${placeholders}) AND family_id = $1`,
       [...ids, req.user.familyId]
     );
 
