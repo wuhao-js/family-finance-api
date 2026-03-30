@@ -108,7 +108,7 @@ router.post('/', authenticate, async (req, res, next) => {
 
     // 将创建者加入家庭并设为管理员
     await execute(
-      'UPDATE users SET family_id = ?, role = ? WHERE id = ?',
+      'UPDATE users SET family_id = ?::text, role = ? WHERE id = ?::text',
       [familyId, 'admin', req.user.id]
     );
 
@@ -138,7 +138,7 @@ router.get('/current', authenticate, async (req, res, next) => {
     }
 
     const families = await query(
-      'SELECT * FROM families WHERE id = ?',
+      'SELECT * FROM families WHERE id = ?::text',
       [req.user.familyId]
     );
 
@@ -151,13 +151,13 @@ router.get('/current', authenticate, async (req, res, next) => {
 
     // 获取家庭成员数量
     const members = await query(
-      'SELECT COUNT(*) as count FROM users WHERE family_id = ?',
+      'SELECT COUNT(*) as count FROM users WHERE family_id = ?::text',
       [req.user.familyId]
     );
 
     // 获取家庭成员列表
     const memberList = await query(
-      'SELECT id, username, nickname, avatar, role, created_at FROM users WHERE family_id = ?',
+      'SELECT id, username, nickname, avatar, role, created_at FROM users WHERE family_id = ?::text',
       [req.user.familyId]
     );
 
@@ -180,7 +180,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
     const { id } = req.params;
 
     const families = await query(
-      'SELECT * FROM families WHERE id = ?',
+      'SELECT * FROM families WHERE id = ?::text',
       [id]
     );
 
@@ -193,7 +193,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
 
     // 获取成员数量
     const members = await query(
-      'SELECT COUNT(*) as count FROM users WHERE family_id = ?',
+      'SELECT COUNT(*) as count FROM users WHERE family_id = ?::text',
       [id]
     );
 
@@ -225,7 +225,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
 
     // 检查是否是管理员
     const families = await query(
-      'SELECT admin_id FROM families WHERE id = ?',
+      'SELECT admin_id FROM families WHERE id = ?::text',
       [id]
     );
 
@@ -264,7 +264,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
 
     params.push(id);
     await execute(
-      `UPDATE families SET ${updates.join(', ')} WHERE id = ?`,
+      `UPDATE families SET ${updates.join(', ')} WHERE id = ?::text`,
       params
     );
 
@@ -289,7 +289,7 @@ router.post('/invite', authenticate, async (req, res, next) => {
 
     // 检查是否是管理员
     const families = await query(
-      'SELECT admin_id, invite_code FROM families WHERE id = ?',
+      'SELECT admin_id, invite_code FROM families WHERE id = ?::text',
       [req.user.familyId]
     );
 
@@ -303,7 +303,7 @@ router.post('/invite', authenticate, async (req, res, next) => {
     // 生成新的邀请码
     const newInviteCode = generateInviteCode();
     await execute(
-      'UPDATE families SET invite_code = ? WHERE id = ?',
+      'UPDATE families SET invite_code = ? WHERE id = ?::text',
       [newInviteCode, req.user.familyId]
     );
 
@@ -355,7 +355,7 @@ router.post('/join', authenticate, async (req, res, next) => {
 
     // 将用户加入家庭
     await execute(
-      'UPDATE users SET family_id = ? WHERE id = ?',
+      'UPDATE users SET family_id = ?::text WHERE id = ?::text',
       [family.id, req.user.id]
     );
 
@@ -398,7 +398,7 @@ router.post('/leave', authenticate, async (req, res, next) => {
 
     // 检查是否是管理员
     const families = await query(
-      'SELECT admin_id FROM families WHERE id = ?',
+      'SELECT admin_id FROM families WHERE id = ?::text',
       [req.user.familyId]
     );
 
@@ -419,7 +419,7 @@ router.post('/leave', authenticate, async (req, res, next) => {
 
     // 退出家庭
     await execute(
-      'UPDATE users SET family_id = NULL WHERE id = ?',
+      'UPDATE users SET family_id = NULL WHERE id = ?::text',
       [req.user.id]
     );
 
@@ -446,7 +446,7 @@ router.delete('/:id', authenticate, async (req, res, next) => {
     }
 
     const families = await query(
-      'SELECT admin_id FROM families WHERE id = ?',
+      'SELECT admin_id FROM families WHERE id = ?::text',
       [id]
     );
 
@@ -465,7 +465,7 @@ router.delete('/:id', authenticate, async (req, res, next) => {
     }
 
     // 解散家庭（用户的family_id会通过外键级联设置为NULL）
-    await execute('DELETE FROM families WHERE id = ?', [id]);
+    await execute('DELETE FROM families WHERE id = ?::text', [id]);
 
     res.json({
       success: true,
@@ -490,7 +490,7 @@ router.delete('/:id/members/:memberId', authenticate, async (req, res, next) => 
     }
 
     const families = await query(
-      'SELECT admin_id FROM families WHERE id = ?',
+      'SELECT admin_id FROM families WHERE id = ?::text',
       [id]
     );
 
@@ -518,7 +518,7 @@ router.delete('/:id/members/:memberId', authenticate, async (req, res, next) => 
 
     // 移除成员
     await execute(
-      'UPDATE users SET family_id = NULL WHERE id = ? AND family_id = ?',
+      'UPDATE users SET family_id = NULL WHERE id = ?::text AND family_id = ?',
       [memberId, id]
     );
 
@@ -553,7 +553,7 @@ router.post('/:id/transfer-admin', authenticate, async (req, res, next) => {
     }
 
     const families = await query(
-      'SELECT admin_id FROM families WHERE id = ?',
+      'SELECT admin_id FROM families WHERE id = ?::text',
       [id]
     );
 
@@ -573,7 +573,7 @@ router.post('/:id/transfer-admin', authenticate, async (req, res, next) => {
 
     // 检查新管理员是否是家庭成员
     const members = await query(
-      'SELECT id FROM users WHERE id = ? AND family_id = ?',
+      'SELECT id FROM users WHERE id = ?::text AND family_id = ?',
       [newAdminId, id]
     );
 
@@ -585,9 +585,9 @@ router.post('/:id/transfer-admin', authenticate, async (req, res, next) => {
     }
 
     // 更新管理员
-    await execute('UPDATE families SET admin_id = ? WHERE id = ?', [newAdminId, id]);
-    await execute('UPDATE users SET role = ? WHERE id = ?', ['admin', newAdminId]);
-    await execute('UPDATE users SET role = ? WHERE id = ?', ['member', req.user.id]);
+    await execute('UPDATE families SET admin_id = ?::text WHERE id = ?::text', [newAdminId, id]);
+    await execute('UPDATE users SET role = ?::text WHERE id = ?::text', ['admin', newAdminId]);
+    await execute('UPDATE users SET role = ?::text WHERE id = ?::text', ['member', req.user.id]);
 
     res.json({
       success: true,
@@ -604,7 +604,7 @@ router.get('/qrcode', authenticate, async (req, res, next) => {
     if (!req.user.familyId) {
       return res.status(400).json({ success: false, message: '您未加入家庭' });
     }
-    const families = await query('SELECT invite_code, name FROM families WHERE id = ?', [req.user.familyId]);
+    const families = await query('SELECT invite_code, name FROM families WHERE id = ?::text', [req.user.familyId]);
     if (!families.length) return res.status(404).json({ success: false, message: '家庭不存在' });
     const { invite_code, name } = families[0];
 
