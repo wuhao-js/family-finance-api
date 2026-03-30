@@ -14,12 +14,12 @@ router.get('/', authenticate, async (req, res, next) => {
       SELECT n.*, u.username as sender_username, u.nickname as sender_nickname, u.avatar as sender_avatar
       FROM notifications n
       LEFT JOIN users u ON n.sender_id = u.id
-      WHERE n.recipient_id = ?
+      WHERE n.recipient_id = $1
     `;
     const params = [req.user.id];
 
     if (isRead !== undefined) {
-      sql += ' AND n.is_read = ?';
+      sql += ' AND n.is_read = $1';
       params.push(isRead === 'true');
     }
 
@@ -30,7 +30,7 @@ router.get('/', authenticate, async (req, res, next) => {
 
     // 获取未读数
     const unreadResult = await query(
-      'SELECT COUNT(*) as count FROM notifications WHERE recipient_id = ? AND is_read = FALSE',
+      'SELECT COUNT(*) as count FROM notifications WHERE recipient_id = $1::text AND is_read = FALSE',
       [req.user.id]
     );
     const unreadCount = unreadResult[0].count;
@@ -63,7 +63,7 @@ router.get('/', authenticate, async (req, res, next) => {
 router.get('/unread-count', authenticate, async (req, res, next) => {
   try {
     const result = await query(
-      'SELECT COUNT(*) as count FROM notifications WHERE recipient_id = ? AND is_read = FALSE',
+      'SELECT COUNT(*) as count FROM notifications WHERE recipient_id = $1::text AND is_read = FALSE',
       [req.user.id]
     );
 
@@ -87,7 +87,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
       `SELECT n.*, u.username as sender_username, u.nickname as sender_nickname, u.avatar as sender_avatar
        FROM notifications n
        LEFT JOIN users u ON n.sender_id = u.id
-       WHERE n.id = ? AND n.recipient_id = ?`,
+       WHERE n.id = $1 AND n.recipient_id = $1`,
       [id, req.user.id]
     );
 
@@ -113,7 +113,7 @@ router.put('/:id/read', authenticate, async (req, res, next) => {
     const { id } = req.params;
 
     await execute(
-      'UPDATE notifications SET is_read = TRUE WHERE id = ? AND recipient_id = ?',
+      'UPDATE notifications SET is_read = TRUE WHERE id = $1::text AND recipient_id = $1',
       [id, req.user.id]
     );
 
@@ -130,7 +130,7 @@ router.put('/:id/read', authenticate, async (req, res, next) => {
 router.put('/read-all', authenticate, async (req, res, next) => {
   try {
     await execute(
-      'UPDATE notifications SET is_read = TRUE WHERE recipient_id = ?',
+      'UPDATE notifications SET is_read = TRUE WHERE recipient_id = $1::text',
       [req.user.id]
     );
 
@@ -149,7 +149,7 @@ router.delete('/:id', authenticate, async (req, res, next) => {
     const { id } = req.params;
 
     const result = await execute(
-      'DELETE FROM notifications WHERE id = ? AND recipient_id = ?',
+      'DELETE FROM notifications WHERE id = $1::text AND recipient_id = $1',
       [id, req.user.id]
     );
 
@@ -176,7 +176,7 @@ router.delete('/', authenticate, async (req, res, next) => {
 
     if (clearRead === 'true') {
       await execute(
-        'DELETE FROM notifications WHERE is_read = TRUE AND recipient_id = ?',
+        'DELETE FROM notifications WHERE is_read = TRUE AND recipient_id = $1',
         [req.user.id]
       );
       res.json({
@@ -186,7 +186,7 @@ router.delete('/', authenticate, async (req, res, next) => {
     } else {
       // 删除所有通知
       await execute(
-        'DELETE FROM notifications WHERE recipient_id = ?',
+        'DELETE FROM notifications WHERE recipient_id = $1::text',
         [req.user.id]
       );
       res.json({
