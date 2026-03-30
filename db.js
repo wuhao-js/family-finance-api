@@ -241,6 +241,33 @@ function getPgPool() {
   return pgPool;
 }
 
+// 把 SQLite 语法转成 PostgreSQL 兼容语法
+function normalizeSQL(sql) {
+  if (DB_TYPE !== 'postgres') return sql;
+  return sql
+    // datetime 函数
+    .replace(/datetime\('now'\)/gi, 'CURRENT_TIMESTAMP')
+    .replace(/datetime\(\?/gi, '?::timestamp')
+    .replace(/date\('now'\)/gi, 'CURRENT_DATE')
+    .replace(/NOW\(\)/gi, 'CURRENT_TIMESTAMP')
+    // SQLite 的 IFNULL → COALESCE
+    .replace(/IFNULL\(/gi, 'COALESCE(')
+    // SQLite 的 LIKE 忽略大小写 → PostgreSQL ILIKE
+    // SQLite 的 GLOB → PostgreSQL ~
+    // SQLite 的 SUBSTR → SUBSTRING
+    .replace(/\bSUBSTR\(/gi, 'SUBSTRING(')
+    // SQLite 的 LENGTH → CHAR_LENGTH
+    .replace(/\bLENGTH\(/gi, 'CHAR_LENGTH(')
+    // SQLite 的 GROUP_CONCAT → STRING_AGG
+    .replace(/\bGROUP_CONCAT\(/gi, 'STRING_AGG(')
+    // LIMIT/OFFSET 兼容性（PostgreSQL 原生支持）
+    // 确保 JSON 字段访问兼容
+    .replace(/json_extract\(/gi, 'json_extract')
+    .replace(/json_object\(/gi, 'json_build_object')
+    // AUTOINCREMENT → SERIAL（仅需知道，不需要替换，因为UUID不用自增）
+    ;
+}
+
 // 把 ? 占位符转成 $1, $2...（适配 pg）
 function convertPlaceholders(sql) {
   let counter = 0;
@@ -249,13 +276,17 @@ function convertPlaceholders(sql) {
 
 async function pgQuery(sql, params = []) {
   const pool = getPgPool();
-  const result = await pool.query(convertPlaceholders(sql), params);
+  const normalized = normalizeSQL(sql);
+  const converted = convertPlaceholders(normalized);
+  const result = await pool.query(converted, params);
   return result.rows;
 }
 
 async function pgExecute(sql, params = []) {
   const pool = getPgPool();
-  const result = await pool.query(convertPlaceholders(sql), params);
+  const normalized = normalizeSQL(sql);
+  const converted = convertPlaceholders(normalized);
+  const result = await pool.query(converted, params);
   return { affectedRows: result.rowCount, insertId: null };
 }
 
