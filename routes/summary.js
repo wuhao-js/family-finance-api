@@ -57,7 +57,7 @@ async function buildSummary(familyId, startDate, endDate) {
   const totals = await query(`
     SELECT type, SUM(amount) as total, COUNT(*) as count
     FROM bills
-    WHERE family_id = ?::text AND date>=? AND date<=?
+    WHERE family_id = $1::text AND date>=? AND date<=?
     GROUP BY type
   `, [familyId, startDate, endDate]);
 
@@ -71,7 +71,7 @@ async function buildSummary(familyId, startDate, endDate) {
   const expCats = await query(`
     SELECT category, SUM(amount) as total, COUNT(*) as count
     FROM bills
-    WHERE family_id = ?::text AND date>=? AND date<=? AND type='expense'
+    WHERE family_id = $1::text AND date>=? AND date<=? AND type='expense'
     GROUP BY category
     ORDER BY total DESC
     LIMIT 5
@@ -81,7 +81,7 @@ async function buildSummary(familyId, startDate, endDate) {
   const incCats = await query(`
     SELECT category, SUM(amount) as total, COUNT(*) as count
     FROM bills
-    WHERE family_id = ?::text AND date>=? AND date<=? AND type='income'
+    WHERE family_id = $1::text AND date>=? AND date<=? AND type='income'
     GROUP BY category
     ORDER BY total DESC
     LIMIT 3
@@ -91,7 +91,7 @@ async function buildSummary(familyId, startDate, endDate) {
   const maxExpense = await query(`
     SELECT amount, category, note, date
     FROM bills
-    WHERE family_id = ?::text AND date>=? AND date<=? AND type='expense'
+    WHERE family_id = $1::text AND date>=? AND date<=? AND type='expense'
     ORDER BY amount DESC
     LIMIT 1
   `, [familyId, startDate, endDate]);
@@ -112,7 +112,7 @@ async function buildSummary(familyId, startDate, endDate) {
     SELECT date, SUM(CASE WHEN type='expense' THEN amount ELSE 0 END) as expense,
            SUM(CASE WHEN type='income' THEN amount ELSE 0 END) as income
     FROM bills
-    WHERE family_id = ?::text AND date>=? AND date<=?
+    WHERE family_id = $1::text AND date>=? AND date<=?
     GROUP BY date
     ORDER BY date ASC
   `, [familyId, startDate, endDate]);
@@ -201,7 +201,7 @@ router.get('/yearly', authenticate, async (req, res, next) => {
              SUM(CASE WHEN type='expense' THEN amount ELSE 0 END) as expense,
              SUM(CASE WHEN type='income' THEN amount ELSE 0 END) as income
       FROM bills
-      WHERE family_id = ?::text AND date>=? AND date<=?
+      WHERE family_id = $1::text AND date>=? AND date<=?
       GROUP BY month ORDER BY month ASC
     `, [req.user.familyId, range.start, range.end]);
 
