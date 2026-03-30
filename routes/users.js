@@ -15,7 +15,7 @@ router.get('/', authenticate, authorize('admin'), async (req, res, next) => {
     const params = [];
 
     if (keyword) {
-      sql += ' AND (username LIKE ? OR email LIKE ? OR nickname LIKE ?)';
+      sql += ' AND (username LIKE $1 OR email LIKE $1 OR nickname LIKE $1)';
       const likeKeyword = `%${keyword}%`;
       params.push(likeKeyword, likeKeyword, likeKeyword);
     }
@@ -36,7 +36,7 @@ router.get('/', authenticate, authorize('admin'), async (req, res, next) => {
     const total = countResult[0].total;
 
     // 获取分页数据
-    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    sql += ' ORDER BY created_at DESC LIMIT $1 OFFSET $1';
     params.push(parseInt(pageSize), offset);
 
     const users = await query(sql, params);
@@ -138,7 +138,7 @@ router.post('/', authenticate, authorize('admin'), async (req, res, next) => {
     // 创建用户
     const userId = generateUUID();
     await execute(
-      'INSERT INTO users (id, username, email, phone, password_hash, nickname, role, family_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO users (id, username, email, phone, password_hash, nickname, role, family_id) VALUES ($1, $1, $1, $1, $1, $1, $1, $1)',
       [userId, username, email || null, phone || null, passwordHash, nickname || username, role || 'member', familyId || null]
     );
 
