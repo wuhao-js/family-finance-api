@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: family-finance-api
+    runtime: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: SQLITE_DB_PATH
+        value: /data/family_finance.db
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: DB_TYPE
+        value: sqlite
+    disk:
+      name: sqlite-data
+      mountPath: /data
+      sizeGB: 1
