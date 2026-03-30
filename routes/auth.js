@@ -59,7 +59,7 @@ router.post('/register', async (req, res, next) => {
     // 创建用户
     const userId = generateUUID();
     await execute(
-      'INSERT INTO users (id, username, email, phone, password_hash, nickname, role) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO users (id, username, email, phone, password_hash, nickname, role) VALUES ($1, $1, $1, $1, $1, $1, $1)',
       [userId, username, email || null, phone || null, passwordHash, nickname || username, 'member']
     );
 
@@ -383,7 +383,7 @@ router.post('/wechat-login', async (req, res, next) => {
 
       await execute(
         `INSERT INTO users (id, username, password_hash, nickname, avatar, wechat_openid, role, is_active, created_at, updated_at)
-         VALUES (?, ?, '', ?, ?, ?, 'member', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+         VALUES ($1, $1, '', $1, $1, $1, 'member', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
         [userId, wxUsername, wxNickname, avatarUrl || null, openid]
       );
 
