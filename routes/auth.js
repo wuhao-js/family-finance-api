@@ -29,7 +29,7 @@ router.post('/register', async (req, res, next) => {
 
     // 检查用户名是否已存在
     const existingUser = await query(
-      'SELECT id FROM users WHERE username = ?',
+      'SELECT id FROM users WHERE username = $1',
       [username]
     );
     if (existingUser.length > 0) {
@@ -42,7 +42,7 @@ router.post('/register', async (req, res, next) => {
     // 检查邮箱是否已存在
     if (email) {
       const existingEmail = await query(
-        'SELECT id FROM users WHERE email = ?',
+        'SELECT id FROM users WHERE email = $1',
         [email]
       );
       if (existingEmail.length > 0) {
@@ -105,7 +105,7 @@ router.post('/login', async (req, res, next) => {
 
     // 查询用户
     const users = await query(
-      'SELECT * FROM users WHERE username = ? OR email = ? OR phone = ?',
+      'SELECT * FROM users WHERE username = $1 OR email = $1 OR phone = $1',
       [username, username, username]
     );
 
@@ -137,7 +137,7 @@ router.post('/login', async (req, res, next) => {
 
     // 更新最后登录时间
     await execute(
-      "UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?::text",
+      "UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1::text",
       [user.id]
     );
 
@@ -183,7 +183,7 @@ router.post('/logout', authenticate, (req, res) => {
 router.get('/me', authenticate, async (req, res, next) => {
   try {
     const users = await query(
-      'SELECT id, username, email, phone, nickname, avatar, role, family_id, last_login_at, created_at FROM users WHERE id = ?::text',
+      'SELECT id, username, email, phone, nickname, avatar, role, family_id, last_login_at, created_at FROM users WHERE id = $1::text',
       [req.user.id]
     );
 
@@ -200,7 +200,7 @@ router.get('/me', authenticate, async (req, res, next) => {
     let family = null;
     if (user.family_id) {
       const families = await query(
-        'SELECT id, name, description, invite_code FROM families WHERE id = ?::text',
+        'SELECT id, name, description, invite_code FROM families WHERE id = $1::text',
         [user.family_id]
       );
       if (families.length > 0) {
@@ -237,7 +237,7 @@ router.put('/profile', authenticate, async (req, res, next) => {
       return res.status(400).json({ success: false, message: '昵称不能为空' });
     }
     await execute(
-      "UPDATE users SET nickname = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?::text",
+      "UPDATE users SET nickname = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $1::text",
       [nickname.trim(), req.user.id]
     );
     res.json({ success: true, message: '资料更新成功' });
@@ -260,7 +260,7 @@ router.put('/password', authenticate, async (req, res, next) => {
 
     // 获取用户当前密码
     const users = await query(
-      'SELECT password_hash FROM users WHERE id = ?::text',
+      'SELECT password_hash FROM users WHERE id = $1::text',
       [req.user.id]
     );
 
@@ -283,7 +283,7 @@ router.put('/password', authenticate, async (req, res, next) => {
     // 加密新密码并更新
     const newPasswordHash = await bcrypt.hash(newPassword, 10);
     await execute(
-      'UPDATE users SET password_hash = ? WHERE id = ?::text',
+      'UPDATE users SET password_hash = $1 WHERE id = $1::text',
       [newPasswordHash, req.user.id]
     );
 
@@ -342,7 +342,7 @@ router.post('/wechat-login', async (req, res, next) => {
 
     // 查找是否已有绑定该 openid 的用户
     let users = await query(
-      'SELECT * FROM users WHERE wechat_openid = ?::text',
+      'SELECT * FROM users WHERE wechat_openid = $1::text',
       [openid]
     );
 
@@ -355,15 +355,15 @@ router.post('/wechat-login', async (req, res, next) => {
       const updates = [];
       const params = [];
       if (nickname && nickname !== user.nickname) {
-        updates.push('nickname = ?'); params.push(nickname);
+        updates.push('nickname = $1'); params.push(nickname);
       }
       if (avatarUrl && avatarUrl !== user.avatar) {
-        updates.push('avatar = ?'); params.push(avatarUrl);
+        updates.push('avatar = $1'); params.push(avatarUrl);
       }
       updates.push("last_login_at = CURRENT_TIMESTAMP");
       params.push(user.id);
       await execute(
-        `UPDATE users SET ${updates.join(', ')} WHERE id = ?::text`,
+        `UPDATE users SET ${updates.join(', ')} WHERE id = $1::text`,
         params
       );
     } else {
@@ -387,12 +387,12 @@ router.post('/wechat-login', async (req, res, next) => {
         [userId, wxUsername, wxNickname, avatarUrl || null, openid]
       );
 
-      const newUsers = await query('SELECT * FROM users WHERE id = ?::text', [userId]);
+      const newUsers = await query('SELECT * FROM users WHERE id = $1::text', [userId]);
       user = newUsers[0];
     }
 
     // 重新读取（确保数据最新）
-    const freshUsers = await query('SELECT * FROM users WHERE id = ?::text', [user.id]);
+    const freshUsers = await query('SELECT * FROM users WHERE id = $1::text', [user.id]);
     user = freshUsers[0];
 
     // 生成 JWT
@@ -427,7 +427,7 @@ router.post('/wechat-login', async (req, res, next) => {
 router.post('/refresh-token', authenticate, async (req, res, next) => {
   try {
     const users = await query(
-      'SELECT family_id, role FROM users WHERE id = ?::text',
+      'SELECT family_id, role FROM users WHERE id = $1::text',
       [req.user.id]
     );
 
@@ -477,7 +477,7 @@ router.post('/avatar', authenticate, avatarUpload.single('avatar'), async (req, 
     const avatarUrl = `${baseUrl}/avatars/${newName}`;
 
     // 更新数据库
-    await execute('UPDATE users SET avatar = ? WHERE id = ?::text', [avatarUrl, req.user.id]);
+    await execute('UPDATE users SET avatar = $1 WHERE id = $1::text', [avatarUrl, req.user.id]);
 
     res.json({ success: true, data: { avatarUrl } });
   } catch (err) {
