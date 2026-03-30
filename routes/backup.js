@@ -17,17 +17,17 @@ router.get('/create', authenticate, async (req, res, next) => {
 
     // 并行获取所有数据
     const [family, members, bills, posts] = await Promise.all([
-      query('SELECT * FROM families WHERE id = ?::text', [familyId]),
+      query('SELECT * FROM families WHERE id = $1::text', [familyId]),
       query(
-        'SELECT id, username, nickname, email, role, status, created_at FROM users WHERE family_id = ?::text',
+        'SELECT id, username, nickname, email, role, status, created_at FROM users WHERE family_id = $1::text',
         [familyId]
       ),
       query(
-        'SELECT * FROM bills WHERE family_id = ?::text ORDER BY date DESC',
+        'SELECT * FROM bills WHERE family_id = $1::text ORDER BY date DESC',
         [familyId]
       ),
       query(
-        'SELECT p.*, pc.content as comment_content FROM posts p LEFT JOIN post_comments pc ON p.id = pc.post_id WHERE p.family_id = ? ORDER BY p.created_at DESC',
+        'SELECT p.*, pc.content as comment_content FROM posts p LEFT JOIN post_comments pc ON p.id = pc.post_id WHERE p.family_id = $1 ORDER BY p.created_at DESC',
         [familyId]
       ).catch(() => []) // posts 表可能未创建，容错处理
     ]);
@@ -37,11 +37,11 @@ router.get('/create', authenticate, async (req, res, next) => {
     let likes = [];
     try {
       comments = await query(
-        'SELECT * FROM post_comments WHERE post_id IN (SELECT id FROM posts WHERE family_id = ?::text)',
+        'SELECT * FROM post_comments WHERE post_id IN (SELECT id FROM posts WHERE family_id = $1::text)',
         [familyId]
       );
       likes = await query(
-        'SELECT * FROM post_likes WHERE post_id IN (SELECT id FROM posts WHERE family_id = ?::text)',
+        'SELECT * FROM post_likes WHERE post_id IN (SELECT id FROM posts WHERE family_id = $1::text)',
         [familyId]
       );
     } catch (_e) {
@@ -88,13 +88,13 @@ router.get('/preview', authenticate, async (req, res, next) => {
     const familyId = req.user.familyId;
 
     const [billCount, memberCount] = await Promise.all([
-      query('SELECT COUNT(*) as count FROM bills WHERE family_id = ?::text', [familyId]),
-      query('SELECT COUNT(*) as count FROM users WHERE family_id = ?::text', [familyId])
+      query('SELECT COUNT(*) as count FROM bills WHERE family_id = $1::text', [familyId]),
+      query('SELECT COUNT(*) as count FROM users WHERE family_id = $1::text', [familyId])
     ]);
 
     let postCount = [{ count: 0 }];
     try {
-      postCount = await query('SELECT COUNT(*) as count FROM posts WHERE family_id = ?::text', [familyId]);
+      postCount = await query('SELECT COUNT(*) as count FROM posts WHERE family_id = $1::text', [familyId]);
     } catch (_e) { /* 忽略 */ }
 
     res.json({
@@ -151,7 +151,7 @@ router.post('/restore', authenticate, async (req, res, next) => {
     // mode: 'merge' 跳过已存在的记录, 'overwrite' 覆盖
     if (mode === 'overwrite') {
       // 清空现有账单
-      await execute('DELETE FROM bills WHERE family_id = ?::text', [familyId]);
+      await execute('DELETE FROM bills WHERE family_id = $1::text', [familyId]);
     }
 
     // 逐条恢复账单
@@ -164,7 +164,7 @@ router.post('/restore', authenticate, async (req, res, next) => {
 
         if (mode === 'merge') {
           // 检查是否已存在（按 id 去重）
-          const existing = await query('SELECT id FROM bills WHERE id = ?::text AND family_id = ?', [bill.id, familyId]);
+          const existing = await query('SELECT id FROM bills WHERE id = $1::text AND family_id = $1', [bill.id, familyId]);
           if (existing.length > 0) {
             skippedCount++;
             continue;
