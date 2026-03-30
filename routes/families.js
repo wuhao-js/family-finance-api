@@ -102,7 +102,7 @@ router.post('/', authenticate, async (req, res, next) => {
     const inviteCode = generateInviteCode();
 
     await execute(
-      'INSERT INTO families (id, name, admin_id, invite_code, description) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO families (id, name, admin_id, invite_code, description) VALUES ($1, $1, $1, $1, $1)',
       [familyId, name, req.user.id, inviteCode, description || null]
     );
 
@@ -362,7 +362,7 @@ router.post('/join', authenticate, async (req, res, next) => {
     // 创建加入通知
     const notificationId = generateUUID();
     await execute(
-      'INSERT INTO notifications (id, type, title, content, recipient_id, sender_id) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO notifications (id, type, title, content, recipient_id, sender_id) VALUES ($1, $1, $1, $1, $1, $1)',
       [
         notificationId,
         'family_join',
