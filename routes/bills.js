@@ -428,7 +428,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
 
     // 检查账单是否存在
     const existingBills = await query(
-      'SELECT id FROM bills WHERE id = ? AND family_id = ?',
+      'SELECT id FROM bills WHERE id = ?::text AND family_id = ?',
       [id, req.user.familyId]
     );
 
@@ -485,7 +485,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
 
     params.push(id);
     await execute(
-      `UPDATE bills SET ${updates.join(', ')} WHERE id = ?`,
+      `UPDATE bills SET ${updates.join(', ')} WHERE id = ?::text`,
       params
     );
 
@@ -504,7 +504,7 @@ router.delete('/:id', authenticate, async (req, res, next) => {
     const { id } = req.params;
 
     const result = await execute(
-      'DELETE FROM bills WHERE id = ? AND family_id = ?',
+      'DELETE FROM bills WHERE id = ?::text AND family_id = ?',
       [id, req.user.familyId]
     );
 
