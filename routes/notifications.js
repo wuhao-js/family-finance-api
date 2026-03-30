@@ -36,7 +36,7 @@ router.get('/', authenticate, async (req, res, next) => {
     const unreadCount = unreadResult[0].count;
 
     // 获取分页数据
-    sql += ' ORDER BY n.created_at DESC LIMIT ? OFFSET ?';
+    sql += ' ORDER BY n.created_at DESC LIMIT $1 OFFSET $1';
     params.push(parseInt(pageSize), offset);
 
     const notifications = await query(sql, params);
