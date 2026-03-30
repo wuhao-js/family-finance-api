@@ -113,7 +113,7 @@ router.post('/subscribe', authenticate, async (req, res, next) => {
     const openid = req.user.wechat_openid;
 
     await execute(
-      `UPDATE users SET notify_types=?, notify_enabled=1 WHERE id=?`,
+      `UPDATE users SET notify_types=?, notify_enabled=1 WHERE id = ?::text`,
       [JSON.stringify(types), req.user.id]
     );
 
@@ -132,7 +132,7 @@ router.post('/subscribe', authenticate, async (req, res, next) => {
 // POST /api/notify/unsubscribe - 取消订阅
 router.post('/unsubscribe', authenticate, async (req, res, next) => {
   try {
-    await execute(`UPDATE users SET notify_enabled=0 WHERE id=?`, [req.user.id]);
+    await execute(`UPDATE users SET notify_enabled=0 WHERE id = ?::text`, [req.user.id]);
     res.json({ success: true, message: '已取消通知' });
   } catch (err) { next(err); }
 });
@@ -140,7 +140,7 @@ router.post('/unsubscribe', authenticate, async (req, res, next) => {
 // GET /api/notify/status - 查询订阅状态
 router.get('/status', authenticate, async (req, res, next) => {
   try {
-    const users = await query('SELECT notify_enabled, notify_types FROM users WHERE id=?', [req.user.id]);
+    const users = await query('SELECT notify_enabled, notify_types FROM users WHERE id = ?::text', [req.user.id]);
     const u = users[0] || {};
     res.json({
       success: true,
