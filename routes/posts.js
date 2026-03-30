@@ -36,7 +36,7 @@ router.get('/', authenticate, async (req, res, next) => {
     const total = countResult[0].total;
 
     // 获取分页数据
-    sql += ' ORDER BY p.created_at DESC LIMIT ? OFFSET ?';
+    sql += ' ORDER BY p.created_at DESC LIMIT $1 OFFSET $1';
     params.push(parseInt(pageSize), offset);
 
     const posts = await query(sql, params);
@@ -157,7 +157,7 @@ router.post('/', authenticate, async (req, res, next) => {
 
     const postId = generateUUID();
     await execute(
-      'INSERT INTO posts (id, content, type, author_id, family_id) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO posts (id, content, type, author_id, family_id) VALUES ($1, $1, $1, $1, $1)',
       [postId, content, type || 'normal', req.user.id, req.user.familyId]
     );
 
@@ -166,14 +166,14 @@ router.post('/', authenticate, async (req, res, next) => {
       for (const userId of mentionedUserIds) {
         const mentionId = generateUUID();
         await execute(
-          'INSERT INTO mentions (id, post_id, user_id) VALUES (?, ?, ?)',
+          'INSERT INTO mentions (id, post_id, user_id) VALUES ($1, $1, $1)',
           [mentionId, postId, userId]
         );
 
         // 发送通知
         const notificationId = generateUUID();
         await execute(
-          'INSERT INTO notifications (id, type, title, content, recipient_id, sender_id, post_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO notifications (id, type, title, content, recipient_id, sender_id, post_id) VALUES ($1, $1, $1, $1, $1, $1, $1)',
           [
             notificationId,
             'mention',
@@ -344,7 +344,7 @@ router.post('/:id/like', authenticate, async (req, res, next) => {
     // 添加点赞
     const likeId = generateUUID();
     await execute(
-      'INSERT INTO likes (id, post_id, user_id) VALUES (?, ?, ?)',
+      'INSERT INTO likes (id, post_id, user_id) VALUES ($1, $1, $1)',
       [likeId, id, req.user.id]
     );
 
@@ -358,7 +358,7 @@ router.post('/:id/like', authenticate, async (req, res, next) => {
     if (posts[0].author_id !== req.user.id) {
       const notificationId = generateUUID();
       await execute(
-        'INSERT INTO notifications (id, type, title, content, recipient_id, sender_id, post_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO notifications (id, type, title, content, recipient_id, sender_id, post_id) VALUES ($1, $1, $1, $1, $1, $1, $1)',
         [
           notificationId,
           'like',
@@ -434,7 +434,7 @@ router.post('/:id/comments', authenticate, async (req, res, next) => {
 
     const commentId = generateUUID();
     await execute(
-      'INSERT INTO comments (id, content, post_id, author_id) VALUES (?, ?, ?, ?)',
+      'INSERT INTO comments (id, content, post_id, author_id) VALUES ($1, $1, $1, $1)',
       [commentId, content, id, req.user.id]
     );
 
@@ -443,14 +443,14 @@ router.post('/:id/comments', authenticate, async (req, res, next) => {
       for (const userId of mentionedUserIds) {
         const mentionId = generateUUID();
         await execute(
-          'INSERT INTO mentions (id, post_id, user_id) VALUES (?, ?, ?)',
+          'INSERT INTO mentions (id, post_id, user_id) VALUES ($1, $1, $1)',
           [mentionId, id, userId]
         );
 
         // 发送通知
         const notificationId = generateUUID();
         await execute(
-          'INSERT INTO notifications (id, type, title, content, recipient_id, sender_id, post_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO notifications (id, type, title, content, recipient_id, sender_id, post_id) VALUES ($1, $1, $1, $1, $1, $1, $1)',
           [
             notificationId,
             'mention',
@@ -468,7 +468,7 @@ router.post('/:id/comments', authenticate, async (req, res, next) => {
     if (posts[0].author_id !== req.user.id) {
       const notificationId = generateUUID();
       await execute(
-        'INSERT INTO notifications (id, type, title, content, recipient_id, sender_id, post_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO notifications (id, type, title, content, recipient_id, sender_id, post_id) VALUES ($1, $1, $1, $1, $1, $1, $1)',
         [
           notificationId,
           'comment',
