@@ -146,7 +146,7 @@ router.get('/status', authenticate, async (req, res, next) => {
       success: true,
       data: {
         enabled: !!u.notify_enabled,
-        types: u.notify_types $1 JSON.parse(u.notify_types) : ['daily','weekly'],
+        types: u.notify_types ? JSON.parse(u.notify_types) : ['daily','weekly'],
       }
     });
   } catch (err) { next(err); }
