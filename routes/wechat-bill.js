@@ -184,7 +184,7 @@ router.post('/import', authenticate, async (req, res, next) => {
       // 去重：相同日期+金额+类型+交易单号
       if (skipDuplicates && r.tradeNo) {
         const exist = await query(
-          'SELECT id FROM bills WHERE family_id = ?::text AND wechat_trade_no=?',
+          'SELECT id FROM bills WHERE family_id = $1::text AND wechat_trade_no=$1',
           [req.user.familyId, r.tradeNo]
         );
         if (exist.length > 0) { skipped++; continue; }
