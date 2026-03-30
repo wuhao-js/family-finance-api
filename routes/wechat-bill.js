@@ -193,7 +193,7 @@ router.post('/import', authenticate, async (req, res, next) => {
       const id = generateUUID();
       await execute(
         `INSERT INTO bills (id, family_id, member_id, type, category, amount, note, date, wechat_trade_no, source, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'wechat_import', CURRENT_TIMESTAMP)`,
+         VALUES ($1, $1, $1, $1, $1, $1, $1, $1, $1, 'wechat_import', CURRENT_TIMESTAMP)`,
         [id, req.user.familyId, req.user.id, r.type, r.category, r.amount, r.note || '', r.date, r.tradeNo || null]
       );
       imported++;
