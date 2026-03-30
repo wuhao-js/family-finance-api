@@ -69,7 +69,7 @@ router.get('/family-members', authenticate, async (req, res, next) => {
     }
 
     const members = await query(
-      'SELECT id, username, email, phone, nickname, avatar, role, created_at FROM users WHERE family_id = ? ORDER BY created_at ASC',
+      'SELECT id, username, email, phone, nickname, avatar, role, created_at FROM users WHERE family_id = ?::text ORDER BY created_at ASC',
       [req.user.familyId]
     );
 
@@ -88,7 +88,7 @@ router.get('/:id', authenticate, async (req, res, next) => {
     const { id } = req.params;
 
     const users = await query(
-      'SELECT id, username, email, phone, nickname, avatar, role, family_id, created_at FROM users WHERE id = ?',
+      'SELECT id, username, email, phone, nickname, avatar, role, family_id, created_at FROM users WHERE id = ?::text',
       [id]
     );
 
@@ -203,7 +203,7 @@ router.put('/:id', authenticate, async (req, res, next) => {
 
     params.push(id);
     await execute(
-      `UPDATE users SET ${updates.join(', ')} WHERE id = ?`,
+      `UPDATE users SET ${updates.join(', ')} WHERE id = ?::text`,
       params
     );
 
@@ -229,7 +229,7 @@ router.delete('/:id', authenticate, authorize('admin'), async (req, res, next) =
       });
     }
 
-    const result = await execute('DELETE FROM users WHERE id = ?', [id]);
+    const result = await execute('DELETE FROM users WHERE id = ?::text', [id]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({
@@ -268,7 +268,7 @@ router.put('/:id/role', authenticate, authorize('admin'), async (req, res, next)
       });
     }
 
-    await execute('UPDATE users SET role = ? WHERE id = ?', [role, id]);
+    await execute('UPDATE users SET role = ?::text WHERE id = ?::text', [role, id]);
 
     res.json({
       success: true,
@@ -293,7 +293,7 @@ router.put('/:id/status', authenticate, authorize('admin'), async (req, res, nex
       });
     }
 
-    await execute('UPDATE users SET is_active = ? WHERE id = ?', [isActive, id]);
+    await execute('UPDATE users SET is_active = ? WHERE id = ?::text', [isActive, id]);
 
     res.json({
       success: true,
