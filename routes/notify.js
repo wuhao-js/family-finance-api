@@ -220,7 +220,7 @@ export async function pushToAllUsers(period) {
 
     for (const u of users) {
       try {
-        const types = u.notify_types $1 JSON.parse(u.notify_types) : ['daily','weekly'];
+        const types = u.notify_types ? JSON.parse(u.notify_types) : ['daily','weekly'];
         if (!types.includes(period)) continue;
 
         let range, summary, templateId, msgData;
