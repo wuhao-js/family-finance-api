@@ -174,7 +174,7 @@ router.post('/restore', authenticate, async (req, res, next) => {
         const billId = bill.id || generateUUID();
         await execute(
           `INSERT INTO bills (id, type, amount, category, date, member_id, payment, note, image_url, family_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           VALUES ($1, $1, $1, $1, $1, $1, $1, $1, $1, $1, $1)
            ON DUPLICATE KEY UPDATE
              type = VALUES(type), amount = VALUES(amount), category = VALUES(category),
              date = VALUES(date), payment = VALUES(payment), note = VALUES(note)`,
@@ -255,7 +255,7 @@ router.post('/import', authenticate, async (req, res, next) => {
         const billId = generateUUID();
         await execute(
           `INSERT INTO bills (id, type, amount, category, date, member_id, payment, note, family_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES ($1, $1, $1, $1, $1, $1, $1, $1, $1)`,
           [billId, type, amount, category, date, req.user.id, payment, note, familyId]
         );
         importedCount++;
