@@ -113,7 +113,7 @@ router.post('/subscribe', authenticate, async (req, res, next) => {
     const openid = req.user.wechat_openid;
 
     await execute(
-      `UPDATE users SET notify_types=?, notify_enabled=1 WHERE id = $1::text`,
+      `UPDATE users SET notify_types=$1, notify_enabled=1 WHERE id = $1::text`,
       [JSON.stringify(types), req.user.id]
     );
 
@@ -146,7 +146,7 @@ router.get('/status', authenticate, async (req, res, next) => {
       success: true,
       data: {
         enabled: !!u.notify_enabled,
-        types: u.notify_types ? JSON.parse(u.notify_types) : ['daily','weekly'],
+        types: u.notify_types $1 JSON.parse(u.notify_types) : ['daily','weekly'],
       }
     });
   } catch (err) { next(err); }
@@ -220,7 +220,7 @@ export async function pushToAllUsers(period) {
 
     for (const u of users) {
       try {
-        const types = u.notify_types ? JSON.parse(u.notify_types) : ['daily','weekly'];
+        const types = u.notify_types $1 JSON.parse(u.notify_types) : ['daily','weekly'];
         if (!types.includes(period)) continue;
 
         let range, summary, templateId, msgData;
