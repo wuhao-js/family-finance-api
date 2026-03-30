@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-const DB_TYPE = process.env.DB_TYPE || 'sqlite'; // 'sqlite' | 'mysql'
+const DB_TYPE = process.env.DB_TYPE || 'sqlite'; // 'sqlite' | 'mysql' | 'postgres'
 
 // UUID 生成器（提前定义，供内部初始化使用）
 const generateUUIDInternal = () => {
@@ -220,13 +220,190 @@ async function initMySQL() {
   conn.release();
 }
 
+// ==================== PostgreSQL 适配器（Supabase / 云数据库）====================
+import pg from 'pg';
+const { Pool } = pg;
+let pgPool = null;
+
+function getPgPool() {
+  if (!pgPool) {
+    pgPool = new Pool({
+      host: process.env.PGHOST || process.env.DB_HOST,
+      port: process.env.PGPORT || process.env.DB_PORT || 5432,
+      user: process.env.PGUSER || process.env.DB_USER || 'postgres',
+      password: process.env.PGPASSWORD || process.env.DB_PASSWORD,
+      database: process.env.PGDATABASE || process.env.DB_NAME || 'postgres',
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    });
+  }
+  return pgPool;
+}
+
+// 把 ? 占位符转成 $1, $2...（适配 pg）
+function convertPlaceholders(sql) {
+  let counter = 0;
+  return sql.replace(/\?/g, () => ++counter);
+}
+
+async function pgQuery(sql, params = []) {
+  const pool = getPgPool();
+  const result = await pool.query(convertPlaceholders(sql), params);
+  return result.rows;
+}
+
+async function pgExecute(sql, params = []) {
+  const pool = getPgPool();
+  const result = await pool.query(convertPlaceholders(sql), params);
+  return { affectedRows: result.rowCount, insertId: null };
+}
+
+async function initPostgres() {
+  const pool = getPgPool();
+  const client = await pool.connect();
+  console.log('[PostgreSQL] 数据库连接成功');
+  client.release();
+}
+
+// PostgreSQL 表结构（适配 Supabase）
+async function initPostgresSchema() {
+  const pool = getPgPool();
+  const schema = `
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      email TEXT,
+      phone TEXT,
+      password_hash TEXT NOT NULL DEFAULT '',
+      nickname TEXT,
+      avatar TEXT,
+      role TEXT DEFAULT 'member',
+      family_id TEXT,
+      wechat_openid TEXT,
+      last_login_at TIMESTAMP,
+      is_active INTEGER DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS families (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      admin_id TEXT NOT NULL,
+      invite_code TEXT UNIQUE NOT NULL,
+      description TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS bills (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      amount DOUBLE PRECISION NOT NULL,
+      category TEXT NOT NULL,
+      date TEXT NOT NULL,
+      member_id TEXT NOT NULL,
+      payment TEXT,
+      note TEXT,
+      image_url TEXT,
+      family_id TEXT NOT NULL,
+      wechat_trade_no TEXT,
+      source TEXT DEFAULT 'manual',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS posts (
+      id TEXT PRIMARY KEY,
+      content TEXT NOT NULL,
+      type TEXT DEFAULT 'normal',
+      author_id TEXT NOT NULL,
+      family_id TEXT NOT NULL,
+      likes INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS comments (
+      id TEXT PRIMARY KEY,
+      content TEXT NOT NULL,
+      post_id TEXT NOT NULL,
+      author_id TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS likes (
+      id TEXT PRIMARY KEY,
+      post_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(post_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS mentions (
+      id TEXT PRIMARY KEY,
+      post_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      title TEXT,
+      content TEXT,
+      recipient_id TEXT NOT NULL,
+      sender_id TEXT,
+      post_id TEXT,
+      is_read INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS budgets (
+      id TEXT PRIMARY KEY,
+      family_id TEXT NOT NULL,
+      category TEXT NOT NULL,
+      budget_amount DOUBLE PRECISION NOT NULL,
+      period TEXT NOT NULL,
+      note TEXT,
+      created_by TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(family_id, category, period)
+    );
+  `;
+
+  // 逐条执行DDL
+  for (const stmt of schema.split(';').filter(s => s.trim())) {
+    try { await pool.query(stmt); } catch (_) {}
+  }
+
+  // Migration：补新列
+  const migrations = [
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS wechat_openid TEXT",
+    "CREATE INDEX IF NOT EXISTS idx_users_wechat_openid ON users(wechat_openid)",
+    "ALTER TABLE bills ADD COLUMN IF NOT EXISTS wechat_trade_no TEXT",
+    "ALTER TABLE bills ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual'",
+    "CREATE INDEX IF NOT EXISTS idx_bills_trade_no ON bills(wechat_trade_no)",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_enabled INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_types TEXT DEFAULT '[\"daily\",\"weekly\"]'",
+  ];
+  for (const sql of migrations) {
+    try { await pool.query(sql); } catch (_) {}
+  }
+
+  console.log('[PostgreSQL] 表结构初始化完成');
+}
+
 // ==================== 自动初始化默认数据 ====================
 async function autoSeedIfEmpty() {
   // 检查是否有用户，没有则自动创建 admin
-  const users = sqliteQuery('SELECT id FROM users LIMIT 1');
+  const users = await query('SELECT id FROM users LIMIT 1');
   if (users.length > 0) return; // 已有数据，跳过
 
-  console.log('[SQLite] 检测到空数据库，自动初始化默认数据...');
+  console.log('[DB] 检测到空数据库，自动初始化默认数据...');
   
   // 用 bcryptjs 生成密码哈希
   let bcrypt;
@@ -238,22 +415,21 @@ async function autoSeedIfEmpty() {
   const familyId = generateUUIDInternal();
 
   // 创建 admin 用户
-  sqliteExecute(
-    `INSERT INTO users (id, username, password_hash, nickname, role, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  await execute(
+    `INSERT INTO users (id, username, password_hash, nickname, role, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
     [adminId, 'admin', pwHash, '管理员', 'admin', 1, now, now]
   );
 
   // 创建家庭
-  sqliteExecute(
-    `INSERT INTO families (id, name, admin_id, invite_code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+  await execute(
+    `INSERT INTO families (id, name, admin_id, invite_code, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)`,
     [familyId, '我的家庭', adminId, 'FAM001', now, now]
   );
 
   // 关联用户和家庭
-  sqliteExecute(`UPDATE users SET family_id = ? WHERE id = ?`, [familyId, adminId]);
+  await execute(`UPDATE users SET family_id = $1 WHERE id = $2`, [familyId, adminId]);
 
-  // better-sqlite3 直接落盘，无需手动保存
-  console.log('[SQLite] 默认账号已创建: admin / admin123，家庭邀请码: FAM001');
+  console.log('[DB] 默认账号已创建: admin / admin123，家庭邀请码: FAM001');
 }
 
 // ==================== 统一接口 ====================
@@ -263,6 +439,10 @@ export const initDatabase = async () => {
   if (initialized) return true;
   if (DB_TYPE === 'mysql') {
     await initMySQL();
+  } else if (DB_TYPE === 'postgres') {
+    await initPostgres();
+    await initPostgresSchema();
+    await autoSeedIfEmpty();
   } else {
     await initSQLiteSchema();
     await autoSeedIfEmpty(); // 自动初始化默认数据
@@ -273,12 +453,14 @@ export const initDatabase = async () => {
 
 export const query = async (sql, params = []) => {
   if (DB_TYPE === 'mysql') return mysqlQuery(sql, params);
+  if (DB_TYPE === 'postgres') return pgQuery(sql, params);
   // better-sqlite3 是同步的，但这里包一层 async 保持上层调用方式不变
   return sqliteQuery(sql, params);
 };
 
 export const execute = async (sql, params = []) => {
   if (DB_TYPE === 'mysql') return mysqlExecute(sql, params);
+  if (DB_TYPE === 'postgres') return pgExecute(sql, params);
   return sqliteExecute(sql, params);
 };
 
@@ -294,6 +476,7 @@ export const closePool = async () => {
   // better-sqlite3 关闭连接
   if (db) { try { db.close(); } catch(_) {} db = null; isInitialized = false; }
   if (mysqlPool) { await mysqlPool.end(); mysqlPool = null; }
+  if (pgPool) { await pgPool.end(); pgPool = null; }
 };
 
 // better-sqlite3 直接写盘，flushSave 保留兼容接口但无需实际操作
