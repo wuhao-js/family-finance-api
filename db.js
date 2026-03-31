@@ -243,35 +243,47 @@ function getPgPool() {
 
 // 把 SQLite 语法转成 PostgreSQL 兼容语法
 function normalizeSQL(sql) {
-  if (DB_TYPE !== 'postgres') return sql;
+  if (DB_TYPE !== 'postgres') {
+    // SQLite 模式：去掉所有 ?::type 类型注解（SQLite 不支持 :: 语法）
+    return sql.replace(/\?::[a-zA-Z]+/g, '?');
+  }
   return sql
     // datetime 函数
     .replace(/datetime\('now'\)/gi, 'CURRENT_TIMESTAMP')
-    .replace(/datetime\(\?/gi, '?::timestamp')
     .replace(/date\('now'\)/gi, 'CURRENT_DATE')
-    .replace(/NOW\(\)/gi, 'CURRENT_TIMESTAMP')
+    .replace(/\bNOW\(\)/gi, 'CURRENT_TIMESTAMP')
+    // SQLite strftime → PostgreSQL TO_CHAR
+    // strftime('%Y-%m-%d', col) → TO_CHAR(col::date, 'YYYY-MM-DD')
+    // strftime('%Y-%m', col)   → TO_CHAR(col::date, 'YYYY-MM')
+    // strftime('%Y', col)      → TO_CHAR(col::date, 'YYYY')
+    .replace(/strftime\('([^']+)',\s*([^)]+)\)/g, (match, fmt, col) => {
+      const pgFmt = fmt
+        .replace(/%Y/g, 'YYYY')
+        .replace(/%m/g, 'MM')
+        .replace(/%d/g, 'DD')
+        .replace(/%H/g, 'HH24')
+        .replace(/%M/g, 'MI')
+        .replace(/%S/g, 'SS');
+      const colClean = col.trim();
+      return `TO_CHAR(${colClean}::date, '${pgFmt}')`;
+    })
     // SQLite 的 IFNULL → COALESCE
-    .replace(/IFNULL\(/gi, 'COALESCE(')
-    // SQLite 的 LIKE 忽略大小写 → PostgreSQL ILIKE
-    // SQLite 的 GLOB → PostgreSQL ~
+    .replace(/\bIFNULL\(/gi, 'COALESCE(')
     // SQLite 的 SUBSTR → SUBSTRING
     .replace(/\bSUBSTR\(/gi, 'SUBSTRING(')
-    // SQLite 的 LENGTH → CHAR_LENGTH
-    .replace(/\bLENGTH\(/gi, 'CHAR_LENGTH(')
-    // SQLite 的 GROUP_CONCAT → STRING_AGG
-    .replace(/\bGROUP_CONCAT\(/gi, 'STRING_AGG(')
-    // LIMIT/OFFSET 兼容性（PostgreSQL 原生支持）
-    // 确保 JSON 字段访问兼容
-    .replace(/json_extract\(/gi, 'json_extract')
-    .replace(/json_object\(/gi, 'json_build_object')
-    // AUTOINCREMENT → SERIAL（仅需知道，不需要替换，因为UUID不用自增）
+    // SQLite 的 LENGTH → CHAR_LENGTH（已在 PostgreSQL 中兼容，可选）
+    // .replace(/\bLENGTH\(/gi, 'CHAR_LENGTH(')
+    // SQLite 的 GROUP_CONCAT → STRING_AGG（需同时传分隔符，暂不自动转）
+    // JSON 函数（如有需要再补）
+    .replace(/\bjson_object\(/gi, 'json_build_object(')
     ;
 }
 
 // 把 ? 占位符转成 $1, $2...（适配 pg）
+// 注意：? 后面可能跟 ::type 类型注解（如 ?::text），这是有效的 PG 语法，直接保留
 function convertPlaceholders(sql) {
   let counter = 0;
-  return sql.replace(/\?/g, () => ++counter);
+  return sql.replace(/\?/g, () => `$${++counter}`);
 }
 
 async function pgQuery(sql, params = []) {
