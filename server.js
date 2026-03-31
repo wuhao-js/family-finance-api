@@ -35,6 +35,9 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// 信任反向代理（Render/Nginx 等），解决 X-Forwarded-For 问题
+app.set('trust proxy', 1);
+
 // 安全中间件
 app.use(helmet({
   contentSecurityPolicy: false,
