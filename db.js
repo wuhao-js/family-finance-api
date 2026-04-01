@@ -41,14 +41,16 @@ function getDB() {
 // 同步查询，返回行数组
 function sqliteQuery(sql, params = []) {
   const database = getDB();
-  const stmt = database.prepare(sql);
+  const normalized = normalizeSQL(sql); // SQLite 模式下去掉 ?::text 等非兼容语法
+  const stmt = database.prepare(normalized);
   return stmt.all(...params.map(p => p === undefined ? null : p));
 }
 
 // 同步执行写操作
 function sqliteExecute(sql, params = []) {
   const database = getDB();
-  const stmt = database.prepare(sql);
+  const normalized = normalizeSQL(sql); // SQLite 模式下去掉 ?::text 等非兼容语法
+  const stmt = database.prepare(normalized);
   const info = stmt.run(...params.map(p => p === undefined ? null : p));
   return { affectedRows: info.changes, insertId: info.lastInsertRowid };
 }
@@ -457,20 +459,20 @@ async function autoSeedIfEmpty() {
   const pwHash = bcrypt ? await bcrypt.hash('admin123', 10) : 'BCRYPT_UNAVAILABLE';
   const familyId = generateUUIDInternal();
 
-  // 创建 admin 用户
+  // 创建 admin 用户（统一使用 ? 占位符，normalizeSQL 会在 PG 模式下自动转 $1,$2...）
   await execute(
-    `INSERT INTO users (id, username, password_hash, nickname, role, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    `INSERT INTO users (id, username, password_hash, nickname, role, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [adminId, 'admin', pwHash, '管理员', 'admin', 1, now, now]
   );
 
   // 创建家庭
   await execute(
-    `INSERT INTO families (id, name, admin_id, invite_code, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+    `INSERT INTO families (id, name, admin_id, invite_code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
     [familyId, '我的家庭', adminId, 'FAM001', now, now]
   );
 
   // 关联用户和家庭
-  await execute(`UPDATE users SET family_id = $1 WHERE id = $2`, [familyId, adminId]);
+  await execute(`UPDATE users SET family_id = ? WHERE id = ?`, [familyId, adminId]);
 
   console.log('[DB] 默认账号已创建: admin / admin123，家庭邀请码: FAM001');
 }
