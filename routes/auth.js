@@ -296,6 +296,180 @@ router.put('/password', authenticate, async (req, res, next) => {
   }
 });
 
+// ========== 微信小程序自动登录（静默，零门槛进入） ==========
+// 流程：前端 wx.login() → code → 后端换 openid → 查/建匿名用户 → 返回 JWT
+// 与 wechat-login 的区别：无需用户主动点击授权，纯静默
+router.post('/auto-login', async (req, res, next) => {
+  try {
+    const { code } = req.body;
+
+    if (!code) {
+      return res.status(400).json({ success: false, message: '缺少 code 参数' });
+    }
+
+    const APPID = process.env.WECHAT_APPID;
+    const SECRET = process.env.WECHAT_SECRET;
+
+    if (!APPID || !SECRET) {
+      // 开发环境下：无法调微信接口，生成匿名本地用户
+      console.warn('[AutoLogin] 未配置 WECHAT_APPID/SECRET，创建本地匿名用户');
+      const userId = generateUUID();
+      const anonName = `用户_${Date.now().toString(36).slice(-4)}`;
+
+      // 确保 wechat_openid 列存在
+      try {
+        await execute("ALTER TABLE users ADD COLUMN wechat_openid TEXT", []);
+        await execute("CREATE INDEX IF NOT EXISTS idx_users_wechat_openid ON users(wechat_openid)", []);
+      } catch { /* 列已存在 */ }
+
+      await execute(
+        `INSERT INTO users (id, username, password_hash, nickname, wechat_openid, role, is_active, created_at, updated_at)
+         VALUES (?, ?, '', ?, NULL, 'member', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [userId, `local_${userId.slice(-8)}`, anonName]
+      );
+
+      const token = jwt.sign(
+        { userId, familyId: null, role: 'member' },
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRES_IN }
+      );
+
+      return res.json({
+        success: true,
+        message: '本地匿名登录成功',
+        data: {
+          token,
+          isNewUser: true,
+          user: {
+            id: userId,
+            username: `local_${userId.slice(-8)}`,
+            nickname: anonName,
+            avatar: null,
+            role: 'member',
+            familyId: null,
+            wechatBound: false,
+          }
+        }
+      });
+    }
+
+    // 调用微信 code2session 接口
+    const wxRes = await new Promise((resolve, reject) => {
+      const url = `https://api.weixin.qq.com/sns/jscode2session?appid=${APPID}&secret=${SECRET}&js_code=${code}&grant_type=authorization_code`;
+      https.get(url, (r) => {
+        let data = '';
+        r.on('data', (chunk) => { data += chunk; });
+        r.on('end', () => {
+          try { resolve(JSON.parse(data)); }
+          catch { reject(new Error('微信接口返回格式错误')); }
+        });
+      }).on('error', reject);
+    });
+
+    if (wxRes.errcode) {
+      console.error('[AutoLogin] code2session 失败:', wxRes);
+      // 微信接口失败时，创建本地匿名用户（不阻塞用户进入）
+      const userId = generateUUID();
+      const anonName = `用户_${Date.now().toString(36).slice(-4)}`;
+      try {
+        await execute("ALTER TABLE users ADD COLUMN wechat_openid TEXT", []);
+      } catch { /* 列已存在 */ }
+      await execute(
+        `INSERT INTO users (id, username, password_hash, nickname, wechat_openid, role, is_active, created_at, updated_at)
+         VALUES (?, ?, '', ?, NULL, 'member', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [userId, `local_${userId.slice(-8)}`, anonName]
+      );
+      const token = jwt.sign(
+        { userId, familyId: null, role: 'member' },
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRES_IN }
+      );
+      return res.json({
+        success: true,
+        message: '离线登录成功',
+        data: {
+          token, isNewUser: true,
+          user: {
+            id: userId,
+            username: `local_${userId.slice(-8)}`,
+            nickname: anonName,
+            avatar: null,
+            role: 'member',
+            familyId: null,
+            wechatBound: false,
+          }
+        }
+      });
+    }
+
+    const openid = wxRes.openid;
+
+    // 确保 wechat_openid 列存在
+    try {
+      await execute("ALTER TABLE users ADD COLUMN wechat_openid TEXT", []);
+      await execute("CREATE INDEX IF NOT EXISTS idx_users_wechat_openid ON users(wechat_openid)", []);
+    } catch { /* 列已存在 */ }
+
+    // 查找是否已有绑定该 openid 的用户
+    let users = await query('SELECT * FROM users WHERE wechat_openid = ?::text', [openid]);
+
+    let user;
+    let isNewUser = false;
+
+    if (users.length > 0) {
+      user = users[0];
+      await execute(
+        "UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?::text",
+        [user.id]
+      );
+    } else {
+      // 新用户 → 自动创建匿名账号
+      isNewUser = true;
+      const userId = generateUUID();
+      const anonName = `用户_${Date.now().toString(36).slice(-4)}`;
+
+      await execute(
+        `INSERT INTO users (id, username, password_hash, nickname, wechat_openid, role, is_active, created_at, updated_at)
+         VALUES (?, ?, '', ?, ?, 'member', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [userId, `wx_${openid.slice(-10)}`, anonName, openid]
+      );
+
+      const newUsers = await query('SELECT * FROM users WHERE id = ?::text', [userId]);
+      user = newUsers[0];
+    }
+
+    // 重新读取确保数据最新
+    const freshUsers = await query('SELECT * FROM users WHERE id = ?::text', [user.id]);
+    user = freshUsers[0];
+
+    const token = jwt.sign(
+      { userId: user.id, familyId: user.family_id, role: user.role },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    res.json({
+      success: true,
+      message: isNewUser ? '欢迎加入' : '欢迎回来',
+      data: {
+        token,
+        isNewUser,
+        user: {
+          id: user.id,
+          username: user.username,
+          nickname: user.nickname,
+          avatar: user.avatar,
+          role: user.role,
+          familyId: user.family_id,
+          wechatBound: !!user.wechat_openid,
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ========== 微信小程序登录 ==========
 // 流程：前端 wx.login() → code → 后端换 openid → 查/建用户 → 返回 JWT
 router.post('/wechat-login', async (req, res, next) => {
