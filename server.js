@@ -39,9 +39,14 @@ const PORT = process.env.PORT || 3001;
 app.set('trust proxy', 1);
 
 // 安全中间件
+// 注意：crossOriginResourcePolicy 和 crossOriginOpenerPolicy 默认值为 same-origin，
+// 会导致微信小程序真机调试时 wx.request 收到响应后被 WebView 拦截（Failed to fetch）
+// 必须设为 cross-origin 或 false，否则小程序无法正常调用 API
 app.use(helmet({
   contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginOpenerPolicy: false,
 }));
 
 // CORS配置 - 支持动态来源（ngrok/局域网/自定义域名）
